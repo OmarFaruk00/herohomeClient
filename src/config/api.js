@@ -1,12 +1,38 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Automatically detect environment and use appropriate API URL
+const getApiUrl = () => {
+  // If REACT_APP_API_URL is explicitly set, use it
+  if (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL !== 'http://localhost:5000/api') {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // If we're on the deployed Firebase site, use production backend
+  const hostname = window.location.hostname;
+  if (hostname === 'homehero-8e501.web.app' || 
+      hostname === 'homehero-8e501.firebaseapp.com' ||
+      hostname.includes('web.app') ||
+      hostname.includes('firebaseapp.com')) {
+    // Use Vercel backend URL
+    return 'https://herohome-server.vercel.app/api';
+  }
+  
+  // Default to localhost for local development
+  return 'http://localhost:5000/api';
+};
+
+const API_URL = getApiUrl();
+
+// Log API URL for debugging (always log in production to help debug)
+console.log('🔗 API URL:', API_URL);
+console.log('🌐 Hostname:', window.location.hostname);
 
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  timeout: 10000 // 10 second timeout
 });
 
 // Request interceptor to add Firebase token to headers
@@ -28,6 +54,15 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Log network errors for debugging
+    if (!error.response) {
+      console.error('🌐 Network Error:', error.message);
+      console.error('📡 API URL attempted:', API_URL);
+      if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+        console.error('❌ Cannot connect to backend server. Make sure it is deployed and running.');
+      }
+    }
+    
     if (error.response?.status === 401 || error.response?.status === 403) {
       const errorMessage = error.response?.data?.error || '';
       const currentPath = window.location.pathname;
